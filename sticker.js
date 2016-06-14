@@ -195,10 +195,9 @@ function Sticker(textDom, stickerDom) {
 Sticker.prototype.renderSticker = function() {
     var html = '',
         _this = this;
-    imagesList.forEach( function (val){
+    _this.imagesList.forEach(function(val) {
         html += '<li><img src="' + _this.imagesPath + val.url + '" data-name="' + val.name + '" data-emoji="' + val.emoji + '" data-type="sticker"></li>';
-
-    })
+    });
     _this.stickerDom.innerHTML = html;
 };
 
@@ -360,7 +359,6 @@ Sticker.prototype.startCheck = function() {
     _this.textDom.onblur = function() {
         clearInterval(_this.checkTimer);
     }
-
 };
 
 Sticker.prototype.init = function() {
