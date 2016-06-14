@@ -5,8 +5,8 @@
 
 
     submit.addEventListener('click', function () {
-         a = (sticker.getValue());
+        alert (sticker.getValue());
     });
     submit1.addEventListener('click', function () {
-         a = (sticker1.getValue());
+        alert (sticker1.getValue());
     });

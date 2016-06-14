@@ -6,7 +6,7 @@ var imagesList = [
     {
         name: '帅气',
         url: 'cool.jpg',
-        emoji: '1f60e'
+        emoji: '1f435'
     },
     {
         name: '再见',
