@@ -1,4 +1,5 @@
-// (function(window, imagesList) {
+(function (win, imagesList) {
+
 var emojiUtil = {},
     editUtil = {};
 
@@ -43,26 +44,28 @@ emojiUtil.checkSuport = function(code) {
     ctx.fillText(code, 0, 0);
     return ctx.getImageData(16, 16, 1, 1).data[0] !== 0;
 };
-emojiUtil.parseImgToString = function(value) {
+
+emojiUtil.parseImgToAgent = function(value) {
     return value.replace(/<img src=\".+?\" data-name=\"(.+?)\" data-emoji=\".+?\">/g, '[$1]');
 };
+
 emojiUtil.removeHsntEmoji = function(value) {
     var patt = /\ud83c[\udf00-\udfff]|\ud83d[\udc00-\ude4f]|\ud83d[\ude80-\udeff]/g;
-    var code, emojiImg = [''],
-        emojiObj;
+    var code, emojiObj;
+    var emojiImg = ['']; //防止没有匹配到的情况
 
     var newValue = value.replace(patt, function(emoji) {
         code = emojiUtil.toCodePoint(emoji);
         emojiImg = imagesList.filter(function(d) {
             return d.emoji == code;
         });
-        if (emojiImg.length == 0) {
+        if (emojiImg.length === 0) {
             return '';
         } else {
             return emoji;
         }
     });
-    if (emojiImg.length == 0) {
+    if (emojiImg.length === 0) {
         return {
             has: 1,
             value: newValue
@@ -74,38 +77,55 @@ emojiUtil.removeHsntEmoji = function(value) {
     }
 };
 /**
- * 转换emoji成为图片或文本模式
+ * 转换emoji成为文本
  * @param  {[type]} value [description]
  * @param  {[type]} type  [description]
  * @return {[type]}       [description]
  */
-// emojiUtil.parseEmojiToAgent = function(value, type) {
-//     var _this = this;
-//     var patt = /\ud83c[\udf00-\udfff]|\ud83d[\udc00-\ude4f]|\ud83d[\ude80-\udeff]/g;
-//     var code, emojiImg = [],
-//         emojiObj;
+emojiUtil.parseEmojiToAgent = function(value) {
+    var _this = this;
+    var patt = /\ud83c[\udf00-\udfff]|\ud83d[\udc00-\ude4f]|\ud83d[\ude80-\udeff]/g;
+    var code, emojiImg = [],
+        emojiObj;
 
-//     var newValue = value.replace(patt, function(emoji) {
-//         code = emojiUtil.toCodePoint(emoji);
-//         emojiImg = imagesList.filter(function(d) {
-//             return d.emoji == code;
-//         });
-//         if (emojiImg.length > 0) {
-//             emojiObj = emojiImg[0];
-//         } else {
-//             emojiImg[0] = ''; // 因为通过判断emojiImg长度来替换字符串，为了替换掉没有的emoji为空。
-//             return '';
-//         }
-//         // return emoji;
-//         // 如果替换成图片 或者 文字 
-//         if (_this.textType == 1) {
-//             return '<img src="' + _this.imagesPath + emojiObj.url + '" data-name="' + emojiObj.name + '" data-emoji="' + emojiObj.emoji + '" data-type="sticker" width="30" height="30">';
-//         } else {
-//             return '[' + emojiObj.name + ']';
-//         }
-//     });
-//     return newValue;
-// };
+    var newValue = value.replace(patt, function(emoji) {
+        code = emojiUtil.toCodePoint(emoji);
+        emojiImg = imagesList.filter(function(d) {
+            return d.emoji == code;
+        });
+        if (emojiImg.length > 0) {
+            emojiObj = emojiImg[0];
+            return '[' + emojiObj.name + ']';
+        }
+    });
+    return newValue;
+};
+
+emojiUtil.parseAgentToEmojiOrImg = function(value) {
+    var patt = /\[(.+?)\]/g;
+    var newValue = value.replace(patt, function(text) {
+        var name = text.split('[')[1].split(']')[0];
+        var images = imagesList.filter(function(d) {
+            return d.name == name;
+        });
+        var image = images[0];
+        if (!image) {
+            return text; // 如果没找到 返回之前的内容
+        }
+        if (image.emoji) {
+            var canUseEmoji = emojiUtil.checkSuport('0x' + image.emoji);
+            if (canUseEmoji) {
+                var codeArr = emojiUtil.findSurrogatePair('0x' + image.emoji);
+                codeArr.unshift('');
+                var code = unescape(codeArr.join('%u'));
+                return code; //如果找到emoji 并且支持 就返回emoji
+            }
+        } else {
+            return '<img width="' + Sticker.imgWidth + '" height="' + Sticker.imgWidth + '" src="' + Sticker.imagesPath + image.url + '" data-name="' + image.name + '" data-emoji="' + image.emoji + '" data-type="sticker">';
+        }
+    });
+    return newValue;
+};
 
 editUtil.insertHtmlAtCaret = function(elem, html) {
     var sel, range;
@@ -184,6 +204,8 @@ function Sticker(textDom, stickerDom) {
     this.imagesList = imagesList;
     this.imagesPath = './sticker/';
     this.checkTimer = 0;
+    this.imgWidth = 30;
+    this.imgHight = 30;
 
     if (textDom.tagName.toLowerCase() == 'div') {
         this.textType = 1; // 是 div 
@@ -212,32 +234,49 @@ Sticker.prototype.bindStickerList = function() {
                 } else {
                     _this.insertText(lists[j].getElementsByTagName('img')[0]);
                 }
-            }
+            };
         })(i);
     }
 };
 
 Sticker.prototype.insertImg = function(img) {
     var _this = this;
-    img = img.cloneNode();
-    img.width = 30;
-    img.height = 30;
-    editUtil.insertHtmlAtCaret(_this.textDom, img.outerHTML);
+    var emoji = img.getAttribute('data-emoji');
+    var emojiStr;
+    if (emoji != 'undefined') {
+        var canUseEmoji = emojiUtil.checkSuport('0x' + emoji);
+        if (canUseEmoji) {
+            var codeArr = emojiUtil.findSurrogatePair('0x' + emoji);
+            codeArr.unshift('');
+            emojiStr = unescape(codeArr.join('%u'));
+        }
+        editUtil.insertHtmlAtCaret(_this.textDom, emojiStr);
+    } else {
+        img = img.cloneNode();
+        img.width = _this.imgWidth;
+        img.height = _this.imgWidth;
+        editUtil.insertHtmlAtCaret(_this.textDom, img.outerHTML);
+    }
 };
 
 Sticker.prototype.insertText = function(img) {
     var _this = this;
-    editUtil.insertTextAtArea(_this.textDom, '[' + img.getAttribute('data-name') + ']');
-};
 
-Sticker.prototype.getValue = function() {
-    var _this = this;
-    if (_this.textType == 1) {
-        return emojiUtil.parseImgToString(_this.textDom.innerHTML);
+    var emoji = img.getAttribute('data-emoji');
+    var emojiStr;
+    if (emoji != 'undefined') {
+        var canUseEmoji = emojiUtil.checkSuport('0x' + emoji);
+        if (canUseEmoji) {
+            var codeArr = emojiUtil.findSurrogatePair('0x' + emoji);
+            codeArr.unshift('');
+            emojiStr = unescape(codeArr.join('%u'));
+        }
+        editUtil.insertTextAtArea(_this.textDom, emojiStr);
     } else {
-        return _this.textDom.value;
+        editUtil.insertTextAtArea(_this.textDom, '[' + img.getAttribute('data-name') + ']');
     }
 };
+
 
 
 Sticker.prototype.removeHsntEmoji = function() {
@@ -259,16 +298,15 @@ Sticker.prototype.removeHsntEmoji = function() {
                 sel.removeAllRanges();
                 sel.addRange(range1);
             }
-
         } else {
             var oldPostion = editUtil.getCursorPostion(_this.textDom);
             var value = _this.textDom.value || _this.textDom.innerHTML;
-            var newValue = emojiUtil.removeHsntEmoji(value);
+            newValue = emojiUtil.removeHsntEmoji(value);
             if (newValue.has) {
                 var defferent = newValue.length - value.length;
                 var range = document.body.createTextRange();
                 range.moveToElementText(_this.textDom);
-                range.moveStart('character', oldPostion-defferent);
+                range.moveStart('character', oldPostion - defferent);
                 range.collapse(true);
                 range.select();
             }
@@ -276,12 +314,22 @@ Sticker.prototype.removeHsntEmoji = function() {
 
     } else {
         var value = _this.textDom.value || _this.textDom.innerHTML || '';
-        newValue = emojiUtil.removeHsntEmoji(value || '');
+        newValue = emojiUtil.removeHsntEmoji(value);
         var pos = editUtil.getCursorPostion(_this.textDom);
         if (newValue.has) {
             _this.textDom.value = newValue.value;
             editUtil.setCaret(_this.textDom, pos - 2);
         }
+    }
+};
+
+
+Sticker.prototype.getValue = function() {
+    var _this = this;
+    if (_this.textType == 1) {
+        return emojiUtil.parseEmojiToAgent(emojiUtil.parseImgToAgent(_this.textDom.innerHTML));
+    } else {
+        return emojiUtil.parseEmojiToAgent(_this.textDom.value);
     }
 };
 
@@ -316,35 +364,7 @@ Sticker.prototype.parseAgentToImage = function() {
     });
     console.log(newValue);
 };
-Sticker.prototype.parseAgentToEmoji = function() {
-    var _this = this;
-    var patt = /\[(.+?)\]/g;
-    var value = _this.textDom.value || _this.textDom.innerHTML;
-    var newValue = value.replace(patt, function(text) {
-        var name = text.split('[')[1].split(']')[0];
-        var images = imagesList.filter(function(d) {
-            return d.name == name && d.emoji;
-        });
-        var image = images[0];
-        if (!image) {
-            return text; // 如果找到 返回之前的内容
-        }
-        if (image.emoji) {
-            var canUseEmoji = emojiUtil.checkSuport('0x' + image.emoji);
-            if (canUseEmoji) {
-                var codeArr = emojiUtil.findSurrogatePair('0x' + image.emoji);
-                codeArr.unshift('');
-                var code = unescape(codeArr.join('%u'));
-                return code; //如果找到emoji 并且支持 就返回emoji
-            }
-        }
-        if (_this.textType == 1) {
-            return '<img src="' + _this.imagesPath + image.url + '" data-name="' + image.name + '" data-emoji="' + image.emoji + '" data-type="sticker">';
-        } else {
-            return text;
-        }
-    });
-};
+
 
 
 
@@ -354,11 +374,11 @@ Sticker.prototype.startCheck = function() {
         _this.checkTimer = setInterval(function() {
             _this.removeHsntEmoji();
         }, 200);
-    }
+    };
 
     _this.textDom.onblur = function() {
         clearInterval(_this.checkTimer);
-    }
+    };
 };
 
 Sticker.prototype.init = function() {
@@ -366,10 +386,15 @@ Sticker.prototype.init = function() {
     _this.renderSticker();
     _this.bindStickerList();
     _this.startCheck();
+    Sticker.imagesPath = _this.imagesPath;
+    Sticker.imgWidth = _this.imgWidth;
+    Sticker.imgHeight = _this.imgHeight;
 };
 
+
 Sticker.parseEmojiToAgent = emojiUtil.parseEmojiToAgent;
+Sticker.parseAgentToEmojiOrImg = emojiUtil.parseAgentToEmojiOrImg;
 
-window.Sticker = Sticker;
+win.Sticker = Sticker;
 
-// })(window, imagesList);
+})(window, imagesList);

@@ -5,8 +5,16 @@
 
 
     submit.onclick=function () {
-        alert (sticker.getValue());
-    }
+        var value = sticker.getValue();
+        var newValue = Sticker.parseAgentToEmojiOrImg(value);
+        var li = document.createElement('li');
+        li.innerHTML = newValue;
+        chatBox.appendChild(li);
+    };
     submit1.onclick = function () {
-        alert (sticker1.getValue());
-    }
+        var value = sticker1.getValue();
+        var newValue = Sticker.parseAgentToEmojiOrImg(value);
+        var li = document.createElement('li');
+        li.innerHTML = newValue;
+        chatBox1.appendChild(li);
+    };
